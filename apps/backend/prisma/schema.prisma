@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  TRUCKER
+  CUSTOMER
+  ADMIN
+}
+
+enum TripStatus {
+  PENDING
+  MATCHED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  DISPUTED
+}
+
+enum VideoType {
+  PICKUP_TRUCKER
+  PICKUP_CUSTOMER
+  PICKUP_WITNESS
+  DROPOFF_TRUCKER
+  DROPOFF_RECEIVER
+  DROPOFF_WITNESS
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  role              UserRole
+  firstName         String
+  lastName          String
+  phoneNumber       String?
+  profileImage      String?
+  isVerified        Boolean   @default(false)
+  isBackgroundChecked Boolean @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  truckerProfile    TruckerProfile?
+  customerProfile   CustomerProfile?
+  trips             Trip[]
+  ratings           Rating[]
+  messages          Message[]
+  notifications     Notification[]
+
+  @@index([email])
+}
+
+model TruckerProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  licenseNumber     String   @unique
+  licenseExpiry     DateTime
+  vehicleType       String
+  vehiclePlate      String
+  vehicleCapacity   Float
+  insuranceNumber   String
+  insuranceExpiry   DateTime
+  isInsured         Boolean  @default(false)
+  
+  averageRating     Float    @default(0)
+  totalTrips        Int      @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  routes            Route[]
+  tripsTrucker      Trip[]
+
+  @@index([userId])
+  @@index([licenseNumber])
+}
+
+model CustomerProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  averageRating     Float    @default(0)
+  totalTrips        Int      @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tripsCustomer     Trip[]
+
+  @@index([userId])
+}
+
+model Route {
+  id                String   @id @default(uuid())
+  truckerId         String
+  trucker           TruckerProfile @relation(fields: [truckerId], references: [id], onDelete: Cascade)
+  
+  startLocation     String
+  startLat          Float
+  startLng          Float
+  endLocation       String
+  endLat            Float
+  endLng            Float
+  
+  availableSpace    Float
+  departureTime     DateTime
+  estimatedArrival  DateTime
+  
+  isActive          Boolean  @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  trips             Trip[]
+
+  @@index([truckerId])
+  @@index([startLat, startLng])
+  @@index([endLat, endLng])
+  @@index([departureTime])
+}
+
+model Trip {
+  id                String      @id @default(uuid())
+  customerId        String
+  customer          User        @relation(fields: [customerId], references: [id])
+  truckerId         String?
+  trucker           TruckerProfile? @relation(fields: [truckerId], references: [id])
+  routeId           String?
+  route             Route?      @relation(fields: [routeId], references: [id])
+  
+  pickupLocation    String
+  pickupLat         Float
+  pickupLng         Float
+  dropoffLocation   String
+  dropoffLat        Float
+  dropoffLng        Float
+  
+  luggageDescription String
+  luggageWeight     Float
+  luggageDimensions String
+  luggageImage      String?
+  
+  status            TripStatus  @default(PENDING)
+  price             Float?
+  
+  pickupTime        DateTime?
+  deliveryTime      DateTime?
+  
+  escrowHeld        Boolean     @default(false)
+  escrowReleased    Boolean     @default(false)
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  videos            Video[]
+  messages          Message[]
+  tracking          TrackingUpdate[]
+  ratings           Rating[]
+
+  @@index([customerId])
+  @@index([truckerId])
+  @@index([routeId])
+  @@index([status])
+  @@index([pickupLat, pickupLng])
+  @@index([dropoffLat, dropoffLng])
+}
+
+model Video {
+  id                String    @id @default(uuid())
+  tripId            String
+  trip              Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  type              VideoType
+  videoUrl          String
+  thumbnailUrl      String?
+  uploadedBy        String
+  
+  createdAt         DateTime  @default(now())
+
+  @@index([tripId])
+  @@index([type])
+}
+
+model TrackingUpdate {
+  id                String    @id @default(uuid())
+  tripId            String
+  trip              Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  latitude          Float
+  longitude         Float
+  timestamp         DateTime  @default(now())
+  
+  @@index([tripId])
+  @@index([timestamp])
+}
+
+model Message {
+  id                String    @id @default(uuid())
+  tripId            String
+  trip              Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  senderId          String
+  sender            User      @relation(fields: [senderId], references: [id])
+  
+  content           String
+  mediaUrl          String?
+  isRead            Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+
+  @@index([tripId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model Rating {
+  id                String    @id @default(uuid())
+  tripId            String
+  trip              Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  reviewerId        String
+  reviewer          User      @relation(fields: [reviewerId], references: [id])
+  
+  rating            Int
+  comment           String?
+  
+  createdAt         DateTime  @default(now())
+
+  @@index([tripId])
+  @@index([reviewerId])
+}
+
+model Notification {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title             String
+  message           String
+  type              String
+  isRead            Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
